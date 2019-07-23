@@ -5,13 +5,11 @@ defmodule VistaClient.MixProject do
     [
       app: :vista_client,
       version: "0.1.0",
-      # build_path: "../../_build",
-      # config_path: "../../config/config.exs",
-      # deps_path: "../../deps",
-      # lockfile: "../../mix.lock",
       elixir: "~> 1.8",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: package(),
+      description: description(),
     ]
   end
 
@@ -23,6 +21,23 @@ defmodule VistaClient.MixProject do
         :inets,
         :hackney,
       ]
+    ]
+  end
+
+  def description do
+    """
+    A client to read cinema program data from VistaConnect.
+    """
+  end
+
+  defp package do
+    [
+      files: ["lib", "mix.exs", "README.md", "LICENSE", "test"],
+      maintainers: ["Martin Dobberstein (Gutsch)"],
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => "https://github.com/gutschilla/elixir-vista-client"
+      }
     ]
   end
 

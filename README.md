@@ -1,7 +1,7 @@
 # VistaClient
 
 A client to read cinema program data from VistaConnect. Example data is provide
-for Yorck Cinemas Berlin. IDs mighty have changed
+for Yorck Cinemas Berlin.
 
 # Synopsis
 
