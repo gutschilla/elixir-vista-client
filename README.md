@@ -152,3 +152,7 @@ config :vista_client,
   vista_api_key: "uwagaherebedransonsJGGFU%$", # <- use your api key
   vista_api_url: "https://vista-connect.big-cinema-chain.com:42182/WSVistaWebClient/" # <- use your URL
 ```
+
+# LICENSE
+
+Licensed under MIT. See [LICENSE](./license)
