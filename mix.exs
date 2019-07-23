@@ -47,6 +47,7 @@ defmodule VistaClient.MixProject do
       {:jason, "~> 1.1.2"},
       {:hackney, "~> 1.15"},
       {:tesla, "~> 1.2.1"},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 end
