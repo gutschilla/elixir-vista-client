@@ -6,10 +6,8 @@ defmodule VistaClient.Pluggable do
   composability.
   """
 
-  @config VistaClient.Config.get()
-
-  plug Tesla.Middleware.BaseUrl, @config.api_url
-  plug Tesla.Middleware.Headers, [{"connectapitoken", @config.api_token},{"Content-Type", "application/json"}]
+  plug Tesla.Middleware.BaseUrl, VistaClient.Config.get().api_url
+  plug Tesla.Middleware.Headers, [{"connectapitoken", VistaClient.Config.get().api_token},{"Content-Type", "application/json"}]
   plug Tesla.Middleware.JSON
 
   def get_session_availabilty(id), do: get("OData.svc/Sessions?$select=ID,SeatsAvailable&$filter=ID+eq+'#{id}'")
