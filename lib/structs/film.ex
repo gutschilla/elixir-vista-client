@@ -18,7 +18,7 @@ defmodule VistaClient.Film do
         "Die große Flucht"
   """
   def transform_name(name_string) do
-    reg = ~r/(.*),\s*(the|der|die|das)/i
+    reg = ~r/(.*),\s*(the|der|die|das)\s*\z/i
     String.replace(name_string, reg, "\\2 \\1")
   end
 
