@@ -1,5 +1,7 @@
 # VistaClient
 
+[![CircleCI](https://circleci.com/gh/gutschilla/elixir-vista-client.svg?style=svg)](https://circleci.com/gh/gutschilla/elixir-vista-client)
+
 A client to read cinema program data from VistaConnect. Example data is provide
 for Yorck Cinemas Berlin.
 
