@@ -152,7 +152,7 @@ in your `config/config.exs` or `config/<dev|prod|test>.exs`
 ```elixir
 config :vista_client, 
   vista_api_key: "uwagaherebedransonsJGGFU%$", # <- use your api key
-  vista_api_url: "https://vista-connect.big-cinema-chain.com:42182/WSVistaWebClient/" # <- use your URL
+  vista_api_url: "https://vista-connect.your-cinema.com:8080/WSVistaWebClient/" # <- use your URL
 ```
 
 # LICENSE
