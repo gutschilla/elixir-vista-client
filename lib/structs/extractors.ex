@@ -77,8 +77,11 @@ defmodule VistaClient.Extractors do
       :error -> {:error, {:key_not_found, key}}
     end
   end
-  def extract_date(datetime = %NaiveDateTime{}) do
+  def extract_date(datetime = %DateTime{}) do
     {:ok, DateTime.to_date(datetime)}
+  end
+  def extract_date(datetime = %NaiveDateTime{}) do
+    {:ok, NaiveDateTime.to_date(datetime)}
   end
   def extract_date(string) when is_binary(string) do
     with {:ok, dt} <- extract_datetime(string),

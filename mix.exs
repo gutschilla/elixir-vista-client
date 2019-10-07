@@ -4,7 +4,7 @@ defmodule VistaClient.MixProject do
   def project do
     [
       app: :vista_client,
-      version: "0.1.0",
+      version: "0.1.2",
       elixir: "~> 1.8",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -47,6 +47,7 @@ defmodule VistaClient.MixProject do
       {:jason, "~> 1.1.2"},
       {:hackney, "~> 1.15"},
       {:tesla, "~> 1.2.1"},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 end
