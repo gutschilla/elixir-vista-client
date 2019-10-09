@@ -68,9 +68,26 @@ defmodule VistaClient do
     {:ok, api_url <>  "OData.svc/Sessions?$select=ID,SeatsAvailable&$filter=ID+eq+'#{id_string}'"}
   end
 
+  def make_url_for(:validate_member, api_url) do
+    {:ok, api_url <> "RESTLoyalty.svc/member/validate"}
+  end
+
   # convert make_url_for/3 to make_url_for/2
   def make_url_for(what, api_url, []) do
     make_url_for(what, api_url)
+  end
+
+  @type retrieved_endpoint :: :validate_member
+  @type param_list :: list()
+  @type payload :: String.t()
+  @spec payload_for(retrieved_endpoint, param_list) :: {:ok, payload} | {:error, reason}
+
+  def payload_for(retrieved_endpoint, param_list) do
+    {:ok, payload} = make_payload_for(retrieved_endpoint, param_list)
+  end
+
+  def make_payload_for(:validate_member, param_list) do
+    Jason.encode(param_list)
   end
 
   def make_request(url) do
@@ -83,6 +100,19 @@ defmodule VistaClient do
       {:error, reason}     -> {:error, reason}
       {:status, 500, body} -> {:error, {:server_error, body}}
       reason               -> {:error, {:something_went_wrong, reason}}
+    end
+  end
+
+  def post_request(url, payload) do
+    with {:ok, headers}                      <- make_basic_headers(),
+         {:ok, status, _headers, client_ref} <- :hackney.request(:POST, url, headers, payload),
+         {:ok, body}                         <- :hackney.body(client_ref),
+         {:status, 200, body}                <- {:status, status, body} do
+      {:ok, body}
+    else
+      {:error, reason}     -> {:error, reason}
+      {:status, 500, body} -> {:error, {:server_error, body}}
+      reason               -> {:error, reason}
     end
   end
 
@@ -102,6 +132,18 @@ defmodule VistaClient do
         nil       -> make_structs(value, what)
         :raw_maps -> {:ok, value}
       end
+    else
+      {:error, reason} -> {:error, reason}
+      reason           -> {:error, reason}
+    end
+  end
+
+  def post(where, param_list, opts \\ []) do
+    with {:ok, url}         <- url_for(where, opts),
+         {:ok, payload}     <- payload_for(where, param_list),
+         {:ok, json_body}   <- post_request(url, payload),
+         {:ok, result_body} <- Jason.decode(json_body) do
+      {:ok, result_body}
     else
       {:error, reason} -> {:error, reason}
       reason           -> {:error, reason}
