@@ -47,20 +47,24 @@ defmodule VistaClient do
     end
   end
 
-  def make_url_for(:root, api_url) do
+  def make_url_for(action, api_url) do
+    make_url_for(action, api_url, [])
+  end
+
+  def make_url_for(:root, api_url, _opts) do
     {:ok, api_url <> "OData.svc"}
   end
 
-  def make_url_for(:cinemas, api_url) do
+  def make_url_for(:cinemas, api_url, _opts) do
     {:ok, api_url <> "OData.svc/Cinemas"}
   end
 
-  def make_url_for(:scheduled_films, api_url) do
+  def make_url_for(:scheduled_films, api_url, _opts) do
     # https://cine-web.yorck.de:42282/WSVistaWebClient/Odata.svc/GetScheduledFilms?cinemaid=1014&$format=json&$orderby=Title&$expand=Sessions
     {:ok, api_url <> "OData.svc/GetScheduledFilms"}
   end
 
-  def make_url_for(:sessions, api_url) do
+  def make_url_for(:sessions, api_url, _opts) do
     {:ok, api_url <> "OData.svc/Sessions"}
   end
 
@@ -68,27 +72,52 @@ defmodule VistaClient do
     {:ok, api_url <>  "OData.svc/Sessions?$select=ID,SeatsAvailable&$filter=ID+eq+'#{id_string}'"}
   end
 
-  def make_url_for(:validate_member, api_url) do
+  def make_url_for(:validate_member, api_url, _opts) do
     {:ok, api_url <> "RESTLoyalty.svc/member/validate"}
   end
 
-  # convert make_url_for/3 to make_url_for/2
-  def make_url_for(what, api_url, []) do
-    make_url_for(what, api_url)
-  end
-
   @type retrieved_endpoint :: :validate_member
-  @type param_list :: list()
   @type payload :: String.t()
-  @spec payload_for(retrieved_endpoint, param_list) :: {:ok, payload} | {:error, reason}
+  @spec payload_for(retrieved_endpoint, list()) :: {:ok, payload} | {:error, reason}
 
-  def payload_for(retrieved_endpoint, param_list) do
-    {:ok, payload} = make_payload_for(retrieved_endpoint, param_list)
+  @doc ~S"""
+  Creates JSON post body (a string) to validate members
+
+  ## Examples
+
+      iex> VistaClient.payload_for(:validate_member, member_card_number: 1234, user_session_id: 666)
+      {:ok, "{\"MemberCardNumber\":\"1234\",\"ReturnMember\":true,\"UserSessionId\":\"666\"}"}
+  """
+  def payload_for(:validate_member, opts \\ []) do
+    with number when not is_nil(number) <- opts[:member_card_number],
+         payload                        <- make_payload(:validate_member, number, opts[:user_session_id]),
+         {:ok, json_string}             <- Jason.encode(payload) do
+      {:ok, json_string}
+    else
+      nil -> {:error, {:missing, :member_card_number}}
+      any -> {:error, any}
+    end
   end
 
-  def make_payload_for(:validate_member, param_list) do
-    Jason.encode(param_list)
+  @doc ~S"""
+  Builds a JSON map formatted to receive membership details. If no
+  user_session_id is specified, a temporaray random one will be generated.
+
+  ## Examples
+
+      iex> VistaClient.make_payload(:validate_member, 1234, "temp_foo")
+      %{"UserSessionId" => "temp_foo", "MemberCardNumber" => "1234", "ReturnMember" => true}
+  """
+  def make_payload(:validate_member, member_card_number, user_session_id \\ nil) do
+    %{
+      "UserSessionId"    => ensure_user_session_id(user_session_id),
+      "MemberCardNumber" => "#{member_card_number}",
+      "ReturnMember"     => true
+    }
   end
+
+  defp ensure_user_session_id(nil), do: "temp_#{VistaClient.Random.string()}"
+  defp ensure_user_session_id(user_session_id), do: "#{user_session_id}"
 
   def make_request(url) do
     with {:ok, headers}                      <- make_basic_headers(),
@@ -112,7 +141,6 @@ defmodule VistaClient do
     else
       {:error, reason}     -> {:error, reason}
       {:status, 500, body} -> {:error, {:server_error, body}}
-      reason               -> {:error, reason}
     end
   end
 
@@ -161,6 +189,14 @@ defmodule VistaClient do
       {:ok, []}                           -> {:error, {:session_not_found, session_id}}
       {:error, reason}                    -> {:error, reason}
     end
+  end
+
+  def validate_member(member_card_number, user_session_id \\ nil) do
+    post(
+      :validate_member,
+      member_card_number: member_card_number,
+      user_session_id: user_session_id
+   )
   end
 
   @doc """
