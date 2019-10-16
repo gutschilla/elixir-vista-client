@@ -76,6 +76,10 @@ defmodule VistaClient do
     {:ok, api_url <> "RESTLoyalty.svc/member/validate"}
   end
 
+  def make_url_for(:add_concessions, api_url, _opts) do
+    {:ok, api_url <> "RESTTicketing.svc/order/concessions"}
+  end
+
   @type command :: :validate_member
   @type payload :: String.t()
   @spec payload_for(command, list()) :: {:ok, payload} | {:error, reason}
@@ -105,14 +109,26 @@ defmodule VistaClient do
       {:error, {:invalid, [user_session_id: :atom]}}
       iex> VistaClient.extract_payload_parameters(:validate_member, user_session_id: "123", member_card_number: "555123456")
       {:ok, [member_card_number: "555123456", user_session_id: "123"]}
+      iex> VistaClient.extract_payload_parameters(:add_concessions, user_session_id: "test", cinema_id: "007", head_office_item_code: "666")
+      {:ok, [user_session_id: "test", cinema_id: "007", head_office_item_code: "666"]}
   """
   def extract_payload_parameters(:validate_member, opts) do
-    with number when not is_nil(number)                  <- opts[:member_card_number],
-         card_number                                     <- to_string(number),
+    with card_number when not is_nil(card_number)        <- opts[:member_card_number],
          user_session_id when is_binary(user_session_id) <- ensure_user_session_id(opts[:user_session_id]) do
-      {:ok, member_card_number: card_number, user_session_id: user_session_id}
+      {:ok, member_card_number: to_string(card_number), user_session_id: user_session_id}
     else
       nil              -> {:error, {:missing, :member_card_number}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def extract_payload_parameters(:add_concessions, opts) do
+    with {:user_session_id, session_id} when is_binary(session_id)      <- {:user_session_id, ensure_user_session_id(opts[:user_session_id])},
+         {:cinema_id, cinema_id} when not is_nil(cinema_id)             <- {:cinema_id, opts[:cinema_id]},
+         {:head_office_item_code, item_code} when not is_nil(item_code) <- {:head_office_item_code, opts[:head_office_item_code]} do
+      {:ok, user_session_id: session_id, cinema_id: to_string(cinema_id), head_office_item_code: to_string(item_code)}
+    else
+      {type, nil}      -> {:error, {:missing, type}}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -131,6 +147,24 @@ defmodule VistaClient do
       "UserSessionId"    => id,
       "MemberCardNumber" => card_num,
       "ReturnMember"     => true
+    }
+  end
+
+  def make_payload(
+    :add_concessions,
+    user_session_id:       user_session_id,
+    cinema_id:             cinema_id,
+    head_office_item_code: head_office_item_code
+  )
+  do
+    %{
+      "UserSessionId" => user_session_id,
+      "CinemaId"      => cinema_id,
+      "Concessions"   => [%{
+        "HeadOfficeItemCode" => head_office_item_code,
+        "GetBarcodeFromVGC"  => true, # VGC is the Vista Vouchers and Gift Cards module
+        "Quantity"           => 1,
+      }]
     }
   end
 
