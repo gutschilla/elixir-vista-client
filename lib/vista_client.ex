@@ -76,26 +76,44 @@ defmodule VistaClient do
     {:ok, api_url <> "RESTLoyalty.svc/member/validate"}
   end
 
-  @type retrieved_endpoint :: :validate_member
+  @type command :: :validate_member
   @type payload :: String.t()
-  @spec payload_for(retrieved_endpoint, list()) :: {:ok, payload} | {:error, reason}
+  @spec payload_for(command, list()) :: {:ok, payload} | {:error, reason}
 
   @doc ~S"""
-  Creates JSON post body (a string) to validate members
+  Creates JSON post body (a string) to select API endpoints
 
   ## Examples
 
       iex> VistaClient.payload_for(:validate_member, member_card_number: 1234, user_session_id: 666)
       {:ok, "{\"MemberCardNumber\":\"1234\",\"ReturnMember\":true,\"UserSessionId\":\"666\"}"}
   """
-  def payload_for(:validate_member, opts \\ []) do
-    with number when not is_nil(number) <- opts[:member_card_number],
-         payload                        <- make_payload(:validate_member, number, opts[:user_session_id]),
-         {:ok, json_string}             <- Jason.encode(payload) do
+  def payload_for(command, opts \\ []) do
+    with {:ok, parameters}  <- extract_payload_parameters(command, opts),
+         payload            <- make_payload(command, parameters),
+         {:ok, json_string} <- Jason.encode(payload) do
       {:ok, json_string}
+    end
+  end
+
+  @doc ~S"""
+  Extracts and validates parameters from opts list for use with make_payload
+
+  ## Examples
+
+      iex> VistaClient.extract_payload_parameters(:validate_member, user_session_id: :atom, member_card_number: 23)
+      {:error, {:invalid, [user_session_id: :atom]}}
+      iex> VistaClient.extract_payload_parameters(:validate_member, user_session_id: "123", member_card_number: "555123456")
+      {:ok, [member_card_number: "555123456", user_session_id: "123"]}
+  """
+  def extract_payload_parameters(:validate_member, opts) do
+    with number when not is_nil(number)                  <- opts[:member_card_number],
+         card_number                                     <- to_string(number),
+         user_session_id when is_binary(user_session_id) <- ensure_user_session_id(opts[:user_session_id]) do
+      {:ok, member_card_number: card_number, user_session_id: user_session_id}
     else
-      nil -> {:error, {:missing, :member_card_number}}
-      any -> {:error, any}
+      nil              -> {:error, {:missing, :member_card_number}}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -105,19 +123,21 @@ defmodule VistaClient do
 
   ## Examples
 
-      iex> VistaClient.make_payload(:validate_member, 1234, "temp_foo")
+      iex> VistaClient.make_payload(:validate_member, member_card_number: "1234", user_session_id: "temp_foo")
       %{"UserSessionId" => "temp_foo", "MemberCardNumber" => "1234", "ReturnMember" => true}
   """
-  def make_payload(:validate_member, member_card_number, user_session_id \\ nil) do
+  def make_payload(:validate_member, member_card_number: card_num, user_session_id: id) do
     %{
-      "UserSessionId"    => ensure_user_session_id(user_session_id),
-      "MemberCardNumber" => "#{member_card_number}",
+      "UserSessionId"    => id,
+      "MemberCardNumber" => card_num,
       "ReturnMember"     => true
     }
   end
 
   defp ensure_user_session_id(nil), do: "temp_#{VistaClient.Random.string()}"
-  defp ensure_user_session_id(user_session_id), do: "#{user_session_id}"
+  defp ensure_user_session_id(id) when is_binary(id), do: id
+  defp ensure_user_session_id(id) when is_integer(id), do: "#{id}"
+  defp ensure_user_session_id(id), do: {:error, {:invalid, user_session_id: id}}
 
   def make_request(url) do
     with {:ok, headers}                      <- make_basic_headers(),
