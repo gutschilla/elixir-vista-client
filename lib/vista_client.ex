@@ -80,6 +80,10 @@ defmodule VistaClient do
     {:ok, api_url <> "RESTTicketing.svc/order/concessions"}
   end
 
+  def make_url_for(:start_external_payment, api_url, _opts) do
+    {:ok, api_url <> "RESTTicketing/order/startexternalpayment"}
+  end
+
   @type command :: :validate_member
                  | :add_concessions
                  | :start_external_payment
