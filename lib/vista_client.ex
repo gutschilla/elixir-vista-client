@@ -100,6 +100,7 @@ defmodule VistaClient do
     end
   end
 
+  @spec extract_payload_parameters(command, list()) :: {:ok, list()} | {:error, reason}
   @doc ~S"""
   Extracts and validates parameters from opts list for use with make_payload
 
@@ -128,8 +129,8 @@ defmodule VistaClient do
          {:head_office_item_code, item_code} when not is_nil(item_code) <- {:head_office_item_code, opts[:head_office_item_code]} do
       {:ok, user_session_id: session_id, cinema_id: to_string(cinema_id), head_office_item_code: to_string(item_code)}
     else
-      {type, nil}      -> {:error, {:missing, type}}
-      {:error, reason} -> {:error, reason}
+      {type, nil}              -> {:error, {:missing, type}}
+      {type, {:error, reason}} -> {:error, reason}
     end
   end
 
