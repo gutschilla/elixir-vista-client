@@ -81,6 +81,8 @@ defmodule VistaClient do
   end
 
   @type command :: :validate_member
+                 | :add_concessions
+                 | :start_external_payment
   @type payload :: String.t()
   @spec payload_for(command, list()) :: {:ok, payload} | {:error, reason}
 
@@ -91,6 +93,15 @@ defmodule VistaClient do
 
       iex> VistaClient.payload_for(:validate_member, member_card_number: 1234, user_session_id: 666)
       {:ok, "{\"MemberCardNumber\":\"1234\",\"ReturnMember\":true,\"UserSessionId\":\"666\"}"}
+      iex> VistaClient.payload_for(:add_concessions, user_session_id: "me", head_office_item_code: "2019")
+      {:error, {:missing, :cinema_id}}
+      iex> VistaClient.payload_for :add_concessions, user_session_id: "abc", cinema_id: "123", head_office_item_code: "XYZ"
+      {:ok, "{\"CinemaId\":\"123\",\"Concessions\":[{\"GetBarcodeFromVGC\":true,\"HeadOfficeItemCode\":\"XYZ\",\"Quantity\":1}],\"UserSessionId\":\"abc\"}"}
+      iex> VistaClient.payload_for :start_external_payment
+      {:error, {:missing, :user_session_id}}
+      iex> VistaClient.payload_for(:start_external_payment, user_session_id: "7357")
+      {:ok, "{\"AutoCompleteOrder\":false,\"UserSessionId\":\"7357\"}"}
+
   """
   def payload_for(command, opts \\ []) do
     with {:ok, parameters}  <- extract_payload_parameters(command, opts),
@@ -130,7 +141,13 @@ defmodule VistaClient do
       {:ok, user_session_id: session_id, cinema_id: to_string(cinema_id), head_office_item_code: to_string(item_code)}
     else
       {type, nil}              -> {:error, {:missing, type}}
-      {type, {:error, reason}} -> {:error, reason}
+      {_type, {:error, reason}} -> {:error, reason}
+    end
+  end
+
+  def extract_payload_parameters(:start_external_payment, opts) do
+    with user_session_id when is_binary(user_session_id) <- require_user_session_id(opts[:user_session_id]) do
+      {:ok, user_session_id: user_session_id}
     end
   end
 
@@ -168,6 +185,16 @@ defmodule VistaClient do
       }]
     }
   end
+
+  def make_payload(:start_external_payment, user_session_id: user_session_id) do
+    %{
+      "UserSessionId"     => user_session_id,
+      "AutoCompleteOrder" => false
+    }
+  end
+
+  defp require_user_session_id(nil), do: {:error, {:missing, :user_session_id}}
+  defp require_user_session_id(id), do: ensure_user_session_id(id)
 
   defp ensure_user_session_id(nil), do: "temp_#{VistaClient.Random.string()}"
   defp ensure_user_session_id(id) when is_binary(id), do: id
