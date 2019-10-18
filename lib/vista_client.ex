@@ -132,7 +132,11 @@ defmodule VistaClient do
       iex> VistaClient.extract_payload_parameters(:validate_member, user_session_id: "123", member_card_number: "555123456")
       {:ok, [member_card_number: "555123456", user_session_id: "123"]}
       iex> VistaClient.extract_payload_parameters(:add_concessions, user_session_id: "test", cinema_id: "007", head_office_item_code: "666")
-      {:ok, [user_session_id: "test", cinema_id: "007", head_office_item_code: "666"]}
+      {:ok, [user_session_id: "test", cinema_id: "007", head_office_item_code: "666", variable_price: nil]}
+      iex> VistaClient.extract_payload_parameters(:add_concessions, user_session_id: "000", head_office_item_code: "aaa", cinema_id: "123", variable_price: 500)
+      {:ok, [user_session_id: "000", cinema_id: "123", head_office_item_code: "aaa", variable_price: 500]}
+      iex> VistaClient.extract_payload_parameters(:start_external_payment, user_session_id: "777")
+      {:ok, [user_session_id: "777"]}
       iex> VistaClient.extract_payload_parameters(:complete_order, user_session_id: "1", customer_email: "foo@bar.baz", payment_value: 2500, pament_reference: "1nc19-832-a83uhd")
       {:error, {:invalid, [payment_reference: nil]}}
       iex> VistaClient.extract_payload_parameters(:complete_order, user_session_id: "1", customer_email: "foo@bar.baz", payment_value: 2500, payment_reference: "1nc19-832-a83uhd")
@@ -149,13 +153,15 @@ defmodule VistaClient do
   end
 
   def extract_payload_parameters(:add_concessions, opts) do
-    with {:user_session_id, session_id} when is_binary(session_id)      <- {:user_session_id, ensure_user_session_id(opts[:user_session_id])},
-         {:cinema_id, cinema_id} when not is_nil(cinema_id)             <- {:cinema_id, opts[:cinema_id]},
-         {:head_office_item_code, item_code} when not is_nil(item_code) <- {:head_office_item_code, opts[:head_office_item_code]} do
-      {:ok, user_session_id: session_id, cinema_id: to_string(cinema_id), head_office_item_code: to_string(item_code)}
+    with {:user_session_id, session_id} when is_binary(session_id)                    <- {:user_session_id, ensure_user_session_id(opts[:user_session_id])},
+         {:cinema_id, cinema_id} when not is_nil(cinema_id)                           <- {:cinema_id, opts[:cinema_id]},
+         {:head_office_item_code, item_code} when not is_nil(item_code)               <- {:head_office_item_code, opts[:head_office_item_code]},
+         {:variable_price, var_price} when is_integer(var_price) or is_nil(var_price) <- {:variable_price, opts[:variable_price]} do
+      {:ok,[user_session_id: session_id, cinema_id: to_string(cinema_id), head_office_item_code: to_string(item_code), variable_price: var_price]}
     else
-      {type, nil}              -> {:error, {:missing, type}}
-      {_type, {:error, reason}} -> {:error, reason}
+      {:variable_price, invalid} -> {:error, {:invalid, variable_price: invalid}}
+      {type, nil}                -> {:error, {:missing, type}}
+      {_type, {:error, reason}}  -> {:error, reason}
     end
   end
 
@@ -203,17 +209,18 @@ defmodule VistaClient do
     :add_concessions,
     user_session_id:       user_session_id,
     cinema_id:             cinema_id,
-    head_office_item_code: head_office_item_code
+    head_office_item_code: head_office_item_code,
+    variable_price:        variable_price
   )
   do
     %{
       "UserSessionId" => user_session_id,
       "CinemaId"      => cinema_id,
-      "Concessions"   => [%{
+      "Concessions"   => [Map.merge(%{
         "HeadOfficeItemCode" => head_office_item_code,
         "GetBarcodeFromVGC"  => true, # VGC is the Vista Vouchers and Gift Cards module
         "Quantity"           => 1,
-      }]
+      }, (if is_nil(variable_price), do: %{}, else: %{"VariablePriceInCents" => variable_price}))]
     }
   end
 
@@ -365,6 +372,24 @@ defmodule VistaClient do
    )
   end
 
+  def add_concession(head_office_item_code, cinema_id, user_session_id \\ nil) do
+    post(
+      :add_concessions,
+      head_office_item_code: head_office_item_code,
+      cinema_id: cinema_id,
+      user_session_id: user_session_id
+    )
+  end
+
+  def add_variable_price_concession(head_office_item_code, price_in_cents, cinema_id, user_session_id \\ nil) do
+    post(
+      :add_concessions,
+      head_office_item_code: head_office_item_code,
+      variable_price: price_in_cents,
+      cinema_id: cinema_id,
+      user_session_id: user_session_id
+    )
+  end
   @doc """
   Returns
   - {:ok, true} if VISTA server seems up
