@@ -32,7 +32,7 @@ defmodule VistaClient do
     end
   end
 
-  @type retrieved_entity :: :cinemas | :scheduled_films | :sessions
+  @type retrieved_entity :: :cinemas | :scheduled_films | :sessions | command
   @type url :: charlist()
 
   @spec url_for(retrieved_entity, keyword()) :: {:ok, url} | {:error, reason}
@@ -84,9 +84,14 @@ defmodule VistaClient do
     {:ok, api_url <> "RESTTicketing/order/startexternalpayment"}
   end
 
+  def make_url_for(:complete_order, api_url, _opts) do
+    {:ok, api_url <> "RESTTicketing/order/payment"}
+  end
+
   @type command :: :validate_member
                  | :add_concessions
                  | :start_external_payment
+                 | :complete_order
   @type payload :: String.t()
   @spec payload_for(command, list()) :: {:ok, payload} | {:error, reason}
 
@@ -105,7 +110,8 @@ defmodule VistaClient do
       {:error, {:missing, :user_session_id}}
       iex> VistaClient.payload_for(:start_external_payment, user_session_id: "7357")
       {:ok, "{\"AutoCompleteOrder\":false,\"UserSessionId\":\"7357\"}"}
-
+      iex(23)> VistaClient.payload_for(:complete_order, user_session_id: "f00", customer_email: "customer@e.mail", payment_value: 1000, payment_reference: "1337")
+      {:ok, "{\"BookingType\":0,\"CustomerEmail\":\"customer@e.mail\",\"CustomerName\":\"WEBSHOP\",\"CustomerPhone\":\"WEBSHOP\",\"GenerateConcessionVoucherPrintStream\":true,\"GeneratePrintStream\":true,\"PaymentInfo\":{\"BankReference\":\"1337\",\"BillFullOutstandingAmount\":true,\"BillingValueCents\":1000,\"CardType\":\"PAYPAL\",\"PaymentValueCents\":1000},\"PerformPayment\":false,\"PrintStreamType\":1,\"PrintTemplateName\":\"www_P@H\",\"ReturnPrintStream\":true,\"UserSessionId\":\"f00\"}"}
   """
   def payload_for(command, opts \\ []) do
     with {:ok, parameters}  <- extract_payload_parameters(command, opts),
@@ -127,6 +133,10 @@ defmodule VistaClient do
       {:ok, [member_card_number: "555123456", user_session_id: "123"]}
       iex> VistaClient.extract_payload_parameters(:add_concessions, user_session_id: "test", cinema_id: "007", head_office_item_code: "666")
       {:ok, [user_session_id: "test", cinema_id: "007", head_office_item_code: "666"]}
+      iex> VistaClient.extract_payload_parameters(:complete_order, user_session_id: "1", customer_email: "foo@bar.baz", payment_value: 2500, pament_reference: "1nc19-832-a83uhd")
+      {:error, {:invalid, [payment_reference: nil]}}
+      iex> VistaClient.extract_payload_parameters(:complete_order, user_session_id: "1", customer_email: "foo@bar.baz", payment_value: 2500, payment_reference: "1nc19-832-a83uhd")
+      {:ok,[user_session_id: "1", customer_email: "foo@bar.baz", payment_value: 2500, payment_reference: "1nc19-832-a83uhd"]}
   """
   def extract_payload_parameters(:validate_member, opts) do
     with card_number when not is_nil(card_number)        <- opts[:member_card_number],
@@ -155,6 +165,19 @@ defmodule VistaClient do
     end
   end
 
+  def extract_payload_parameters(:complete_order, opts) do
+    with session_id when is_binary(session_id)          <- require_user_session_id(opts[:user_session_id]),
+         {:ok, cust_mail}                               <- quickcheck_email_address(opts[:customer_email]),
+         {:value, pay_value} when is_integer(pay_value) <- {:value, opts[:payment_value]},
+         {:pay_ref, pay_ref} when is_binary(pay_ref)    <- {:pay_ref, opts[:payment_reference]} do
+      {:ok, user_session_id: session_id, customer_email: cust_mail, payment_value: pay_value, payment_reference: pay_ref}
+    else
+      {:value, value}     -> {:error, {:invalid, payment_value: value}}
+      {:pay_ref, pay_ref} -> {:error, {:invalid, payment_reference: pay_ref}}
+      {:error, reason}    -> {:error, reason}
+    end
+  end
+
   @doc ~S"""
   Builds a JSON map formatted to receive membership details. If no
   user_session_id is specified, a temporaray random one will be generated.
@@ -163,6 +186,10 @@ defmodule VistaClient do
 
       iex> VistaClient.make_payload(:validate_member, member_card_number: "1234", user_session_id: "temp_foo")
       %{"UserSessionId" => "temp_foo", "MemberCardNumber" => "1234", "ReturnMember" => true}
+      iex> VistaClient.make_payload(:start_external_payment, user_session_id: "idontwannapay")
+      %{"AutoCompleteOrder" => false, "UserSessionId" => "idontwannapay"}
+      iex> VistaClient.make_payload(:complete_order, user_session_id: "idontwannapay", customer_email: "idont@wanna.pay", payment_value: 1234, payment_reference: "buttheypaidanyway")
+      %{"BookingType" => 0, "CustomerEmail" => "idont@wanna.pay", "CustomerName" => "WEBSHOP", "CustomerPhone" => "WEBSHOP", "GenerateConcessionVoucherPrintStream" => true, "GeneratePrintStream" => true, "PaymentInfo" => %{"BankReference" => "buttheypaidanyway", "BillFullOutstandingAmount" => true, "BillingValueCents" => 1234, "CardType" => "PAYPAL", "PaymentValueCents" => 1234}, "PerformPayment" => false, "PrintStreamType" => 1, "PrintTemplateName" => "www_P@H", "ReturnPrintStream" => true, "UserSessionId" => "idontwannapay"}
   """
   def make_payload(:validate_member, member_card_number: card_num, user_session_id: id) do
     %{
@@ -197,6 +224,36 @@ defmodule VistaClient do
     }
   end
 
+  def make_payload(
+    :complete_order,
+    user_session_id:   usid,
+    customer_email:    cust_mail,
+    payment_value:     pay_amount,
+    payment_reference: pay_bankref
+  )
+  do
+    %{
+      "UserSessionId"                        => usid,
+      "CustomerEmail"                        => cust_mail,
+      "CustomerPhone"                        => "WEBSHOP",
+      "CustomerName"                         => "WEBSHOP",
+      "BookingType"                          => 0, # this is a paid booking
+      "GeneratePrintStream"                  => true,
+      "GenerateConcessionVoucherPrintStream" => true,
+      "PrintStreamType"                      => 1,
+      "PrintTemplateName"                    => "www_P@H",
+      "ReturnPrintStream"                    => true,
+      "PerformPayment"                       => false, # payment is processed externally
+      "PaymentInfo"                          => %{
+        "PaymentValueCents"                    => pay_amount,
+        "BillingValueCents"                    => pay_amount,
+        "BillFullOutstandingAmount"            => true,
+        "BankReference"                        => pay_bankref,
+        "CardType"                             => "PAYPAL"
+      }
+    }
+  end
+
   defp require_user_session_id(nil), do: {:error, {:missing, :user_session_id}}
   defp require_user_session_id(id), do: ensure_user_session_id(id)
 
@@ -204,6 +261,29 @@ defmodule VistaClient do
   defp ensure_user_session_id(id) when is_binary(id), do: id
   defp ensure_user_session_id(id) when is_integer(id), do: "#{id}"
   defp ensure_user_session_id(id), do: {:error, {:invalid, user_session_id: id}}
+
+  @doc ~S"""
+  Roughly checks if the given binary has the form of a valid e-mail address
+  using a not fully RFC-compliant regular expression taken from
+  https://html.spec.whatwg.org/multipage/input.html#e-mail-state-(type=email)
+
+  ## Examples
+
+      iex> VistaClient.quickcheck_email_address(123)
+      {:error, {:invalid, [email: 123]}}
+      iex> VistaClient.quickcheck_email_address("foo@bar.baz")
+      {:ok, "foo@bar.baz"}
+      iex> VistaClient.quickcheck_email_address("dash.is.not@-allowed.everywhere")
+      {:error, {:invalid, [email: "dash.is.not@-allowed.everywhere"]}}
+  """
+  def quickcheck_email_address(address) when is_binary(address) do
+    with match when is_list(match) <- Regex.run(~r/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/, address) do
+      Enum.fetch(match,0)
+    else
+      nil -> {:error, {:invalid, email: address}}
+    end
+  end
+  def quickcheck_email_address(not_a_binary), do: {:error,{:invalid, email: not_a_binary}}
 
   def make_request(url) do
     with {:ok, headers}                      <- make_basic_headers(),
