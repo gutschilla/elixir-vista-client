@@ -324,14 +324,22 @@ defmodule VistaClient do
   def make_structs(cinemas,   :cinemas),         do: Cinema.from_map_list(cinemas)
   def make_structs(seats,     :seats_available), do: SessionAvailability.from_map_list(seats)
 
+  @doc ~S"""
+  Performs a HTTP-GET request and decodes the JSON response into a struct.
+  Returns {:ok, <Cinema|Session|...>}.
+
+  *Options*:
+    - :output => set to :raw_maps to get plain decoded JSON map
+  """
   def get(what, opts \\ []) do
     with {:ok, url}       <- url_for(what, opts),
          {:ok, json_body} <- make_request(url),
          {:ok, map}       <- Jason.decode(json_body),
          {:ok, value}     <- Map.fetch(map, "value") do
-      case Keyword.get(opts, :output) do
-        nil       -> make_structs(value, what)
-        :raw_maps -> {:ok, value}
+      if opts[:output] == :raw_maps do
+        {:ok, value}
+      else
+        make_structs(value, what)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -388,6 +396,23 @@ defmodule VistaClient do
       variable_price: price_in_cents,
       cinema_id: cinema_id,
       user_session_id: user_session_id
+    )
+  end
+
+  def start_external_payment(user_session_id) do
+    post(
+      :start_external_payment,
+      user_session_id
+    )
+  end
+
+  def complete_order(user_session_id, customer_email, payment_value, payment_reference) do
+    post(
+      :complete_order,
+      user_session_id:   user_session_id,
+      customer_email:    customer_email,
+      payment_value:     payment_value,
+      payment_reference: payment_reference
     )
   end
   @doc """
