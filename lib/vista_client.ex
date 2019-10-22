@@ -329,14 +329,14 @@ defmodule VistaClient do
   Returns {:ok, <Cinema|Session|...>}.
 
   *Options*:
-    - :output => set to :raw_maps to get plain decoded JSON map
+    - :output_raw_maps => set to true to get plain decoded JSON map
   """
   def get(what, opts \\ []) do
     with {:ok, url}       <- url_for(what, opts),
          {:ok, json_body} <- make_request(url),
          {:ok, map}       <- Jason.decode(json_body),
          {:ok, value}     <- Map.fetch(map, "value") do
-      if opts[:output] == :raw_maps do
+      if opts[:output_raw_maps] do
         {:ok, value}
       else
         make_structs(value, what)
