@@ -81,11 +81,11 @@ defmodule VistaClient do
   end
 
   def make_url_for(:start_external_payment, api_url, _opts) do
-    {:ok, api_url <> "RESTTicketing/order/startexternalpayment"}
+    {:ok, api_url <> "RESTTicketing.svc/order/startexternalpayment"}
   end
 
   def make_url_for(:complete_order, api_url, _opts) do
-    {:ok, api_url <> "RESTTicketing/order/payment"}
+    {:ok, api_url <> "RESTTicketing.svc/order/payment"}
   end
 
   @type command :: :validate_member
@@ -402,7 +402,7 @@ defmodule VistaClient do
   def start_external_payment(user_session_id) do
     post(
       :start_external_payment,
-      user_session_id
+      user_session_id: user_session_id
     )
   end
 
