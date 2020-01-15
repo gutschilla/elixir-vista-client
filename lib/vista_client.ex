@@ -293,10 +293,11 @@ defmodule VistaClient do
   def quickcheck_email_address(not_a_binary), do: {:error,{:invalid, email: not_a_binary}}
 
   def make_request(url) do
-    with {:ok, headers}                      <- make_basic_headers(),
-         {:ok, status, _headers, client_ref} <- :hackney.request(:GET, url, headers),
-         {:ok, body}                         <- :hackney.body(client_ref),
-         {:status, 200, body}                <- {:status, status, body} do
+    with {:ok, headers}                       <- make_basic_headers(),
+         {:ok, response = %Mojito.Response{}} <- Mojito.get(url, headers),
+         # {:ok, status, _headers, client_ref} <- :hackney.request(:GET, url, headers),
+         # {:ok, body}                         <- :hackney.body(client_ref),
+         {:status, 200, body}                 <- {:status, response.status_code, response.body} do
       {:ok, body}
     else
       {:error, reason}     -> {:error, reason}
@@ -306,10 +307,11 @@ defmodule VistaClient do
   end
 
   def post_request(url, payload) do
-    with {:ok, headers}                      <- make_basic_headers(),
-         {:ok, status, _headers, client_ref} <- :hackney.request(:POST, url, headers, payload),
-         {:ok, body}                         <- :hackney.body(client_ref),
-         {:status, 200, body}                <- {:status, status, body} do
+    with {:ok, headers}                       <- make_basic_headers(),
+         {:ok, response = %Mojito.Response{}} <- Mojito.post(url, headers, payload),
+         # {:ok, status, _headers, client_ref} <- :hackney.request(:POST, url, headers, payload),
+         # {:ok, body}                         <- :hackney.body(client_ref),
+         {:status, 200, body}                <- {:status, response.status_code, response.body} do
       {:ok, body}
     else
       {:error, reason}     -> {:error, reason}
@@ -427,13 +429,15 @@ defmodule VistaClient do
   """
   @spec online? :: {:ok, boolean()} | {:error, reason}
   def online? do
-    with {:ok, url}                       <- url_for(:root),
-         {:ok, headers}                   <- make_basic_headers(),
-         {:ok, 200, _headers, client_ref} <- :hackney.request(:GET, url, headers) do
+    with {:ok, url}                                            <- url_for(:root),
+         {:ok, headers}                                        <- make_basic_headers(),
+         {:ok, %Mojito.Response{body: body, status_code: 200}} <- Mojito.request(method: :get, url: url, headers: headers) do
+         # {:ok, 200, _headers, client_ref} <- :hackney.request(:GET, url, headers) do
       {:ok, true}
     else
-      {:error, reason} -> {:error, reason}
-      _                -> false
+      {:ok, r = %{status_code: _}} -> {:error, {:status_code, r}}
+      {:error, reason}             -> {:error, reason}
+      _                            -> false
     end
   end
 end
